@@ -5,3 +5,5 @@ __pycache__/
 .env
 selfcheck_report.json
 dist/
+docs/
+colab/

@@ -39,8 +39,12 @@ Rules:
 3. Follow every rule, format, threshold, rounding rule and edge case stated in the task. If reference documents are given, their rules override general knowledge.
 4. If the task forbids some functions or methods, do not use them anywhere in the code (not even as variable names); implement that logic yourself.
 5. No test code, no example calls, no `if __name__ == "__main__"` block.
+6. Implement only what the task asks. Do not add input validation, format checks or error handling that the task does not request (invalid input is handled only if the task or the documents say how).
+7. If the documents say to normalize the input first (for example convert to upper case, strip spaces), do that as the first statement of the function, before any other check or lookup.
+8. When the documents give a table of items with values, put the table into a dict keyed exactly as in the documents and look values up by key. Never find parts of a string by hard-coded index or length unless the task asks for string slicing.
+9. Check every condition column in the documents (minimum amount, cap, rounding, limits) is applied in the code, in the order the documents describe.
 
-First write a plan in plain text of at most 4 short lines (no code): the rules to apply and the edge cases. Check the plan against every example in the task.
+First write a plan of at most 5 short numbered steps in plain text (no code), in the order the code will run: (1) normalize the input, (2) look up or classify, (3) apply every condition and limit, (4) round or format the result, (5) return. Check the plan against every example in the task.
 Then output the complete solution as exactly ONE ```python code block, and nothing after it."""
 
 
