@@ -1,0 +1,59 @@
+{
+  "id": "casestudy",
+  "title": "ชุดข้อสอบปรนัยจาก casestudy_session_exam.pdf (10 เคส × 10 ข้อ)",
+  "namespace": "casestudy",
+  "knowledge": [
+    {
+      "doc_id": "01_polynomial_equations_th",
+      "file": "../../sample_pack/knowledge/01_polynomial_equations_th.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "02_dichotomous_key_ar",
+      "file": "../../sample_pack/knowledge/02_dichotomous_key_ar.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "03_cobol_programming_th",
+      "file": "../../sample_pack/knowledge/03_cobol_programming_th.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "04_functional_dependency_us",
+      "file": "../../sample_pack/knowledge/04_functional_dependency_us.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "05_ubu_graduation_regulations_uk",
+      "file": "../../sample_pack/knowledge/05_ubu_graduation_regulations_uk.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "06_ananta_nagaraja_legend_th",
+      "file": "../../sample_pack/knowledge/06_ananta_nagaraja_legend_th.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "07_chinese_daily_conversation_zh",
+      "file": "../../sample_pack/knowledge/07_chinese_daily_conversation_zh.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "08_microservice_infrastructure_zh",
+      "file": "../../sample_pack/knowledge/08_microservice_infrastructure_zh.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "09_data_structures_algorithms_th",
+      "file": "../../sample_pack/knowledge/09_data_structures_algorithms_th.md",
+      "format": "markdown"
+    },
+    {
+      "doc_id": "10_essential_words_four_languages_th",
+      "file": "../../sample_pack/knowledge/10_essential_words_four_languages_th.md",
+      "format": "markdown"
+    }
+  ],
+  "mc": "mc.json",
+  "shuffle_seed": 2569
+}
