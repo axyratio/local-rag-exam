@@ -43,6 +43,7 @@ Rules:
 7. If the documents say to normalize the input first (for example convert to upper case, strip spaces), do that as the first statement of the function, before any other check or lookup.
 8. When the documents give a table of items with values, put the table into a dict keyed exactly as in the documents and look values up by key. Never find parts of a string by hard-coded index or length unless the task asks for string slicing.
 9. Check every condition column in the documents (minimum amount, cap, rounding, limits) is applied in the code, in the order the documents describe.
+10. If the task is to check that a string has a required format, describe the whole format as ONE regular expression and test it with re.fullmatch. Never check a format by counting len() or by comparing hard-coded indexes: counting characters by hand is error-prone. Build the pattern part by part from the documents (literal text, allowed characters, exact repeat counts) and re-read each part against the documents before writing it.
 
 First write a plan of at most 5 short numbered steps in plain text (no code), in the order the code will run: (1) normalize the input, (2) look up or classify, (3) apply every condition and limit, (4) round or format the result, (5) return. Check the plan against every example in the task.
 Then output the complete solution as exactly ONE ```python code block, and nothing after it."""
