@@ -31,7 +31,7 @@ Rules:
 7. The question and the options are written in Thai, but the documents may be in English, Chinese or Arabic (or a mix with Thai). Match the question to the documents by meaning, not by exact wording: translate the key terms between the languages. When you quote a sentence, quote it as written in the document, without translating it.
 
 Reply in JSON: {"reason": "...", "answer": "<option key>"}.
-In "reason": first copy the one sentence from the documents that answers the question (word for word, in its original language), or write the calculation; then name the option whose meaning matches that sentence. At most 3 short sentences. Do not choose an option just because it sounds common or reasonable; the sentence from the documents decides. Finish "reason" with exactly this closing line: "Therefore: <key>. <first few words of that option>", and set "answer" to that same key. "answer" is exactly one option key."""
+In "reason": first copy the one sentence from the documents that answers the question (word for word, in its original language), or write the calculation; then name the option whose meaning matches that sentence. For a lookup question write at most 2 short sentences and keep the quoted sentence under 200 characters. For a question that needs a calculation, tracing code, finding a set of roots/keys, or checking every option, write the working instead (at most 12 short lines): test each option by substitution, tracing or computing the closure, and discard the options that fail. Do not choose an option just because it sounds common or reasonable; the sentence from the documents decides. Finish "reason" with exactly this closing line: "Therefore: <key>. <first few words of that option>", and set "answer" to that same key. "answer" is exactly one option key."""
 
 CODE_SYSTEM = """You are an expert Python programmer solving programming exam tasks written in Thai.
 
@@ -57,6 +57,9 @@ def build_mc_prompt(question: str, options: list[tuple[str, str]], hits) -> list
     tail = f"คำถาม: {question.strip()}\nตัวเลือก:\n{option_lines}\n"
     if _NEGATIVE.search(question):
         tail += "\nNote: this question asks for the option that is NOT correct / the exception. Check every option against the documents.\n"
+    if _needs_working(question, options):
+        tail += ("\nNote: this question needs a calculation or a trace. Do the working step by step in \"reason\": compute with the exact numbers given, "
+                 "check each option by substitution (or by running the code / the rule line by line), and only then pick the option that survives.\n")
     tail += ("\nFind the sentence or rule in <documents> that answers this question (apply it step by step if it needs a calculation), then choose the option that says the same thing."
              "\nThe answer is exactly one option key. Every option is equally likely before you check it: do not prefer the first or the last option, and do not guess when the documents give the answer.")
 
@@ -64,6 +67,17 @@ def build_mc_prompt(question: str, options: list[tuple[str, str]], hits) -> list
     docs = _documents(hits, budget)
     user = (docs + "\n\n" if docs else "(no relevant documents found)\n\n") + tail
     return [{"role": "system", "content": MC_SYSTEM}, {"role": "user", "content": user}]
+
+
+_WORK_CUE = re.compile(r"คำนวณ|จงหา|GPAX|เซตคำตอบ|คีย์คู่แข่ง|candidate key|attribute closure")
+
+
+def _needs_working(question: str, options: list[tuple[str, str]]) -> bool:
+    """โจทย์ที่ต้องคำนวณ/ไล่โค้ด/หาเซต: มีบล็อกโค้ด คำสั่งคำนวณ หรือตัวเลือกส่วนใหญ่เป็นตัวเลข/เซต"""
+    if "```" in question or _WORK_CUE.search(question):
+        return True
+    numeric = sum(1 for _, t in options if re.search(r"\d", t) and len(re.findall(r"[฀-๿]", t)) < 12)
+    return numeric >= max(2, len(options) // 2)
 
 
 def build_code_prompt(requirement: str, signature: str | None, entry_point: str | None, hits) -> list[dict]:
