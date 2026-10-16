@@ -7,3 +7,4 @@ selfcheck_report.json
 dist/
 docs/
 colab/
+tools/data/

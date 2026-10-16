@@ -7,3 +7,5 @@ tools
 *.md
 docker-compose.yml
 dist/
+docs/
+

@@ -27,9 +27,100 @@ def make_query(question: str, options: list[str]) -> str:
 
 
 def search(chunks: list[Chunk], query_text: str, query_vector: list[float] | None, k: int) -> list[tuple[Chunk, float]]:
-    """คืน chunk ที่เกี่ยวข้องที่สุด (สูงสุด settings.TOP_K ชิ้น) เรียงจากคะแนนมากไปน้อย"""
+    """คืน chunk ที่เกี่ยวข้องที่สุด
+
+    คลังที่มีทั้งเอกสารภาษาไทยและเอกสารภาษาอื่น (อังกฤษ/จีน/อาหรับ) ใช้ _search_groups
+    คลังภาษาเดียวใช้ _search_hybrid (วิธีเดิม)
+    """
     if not chunks:
         return []
+    thai, other = _split_by_language(chunks)
+    if settings.GROUP_SEARCH and thai and other:
+        return _search_groups(chunks, thai, other, query_text, query_vector)
+    return _search_hybrid(chunks, query_text, query_vector, k)
+
+
+def _search_groups(chunks: list[Chunk], thai: list[int], other: list[int], query_text: str,
+                   query_vector: list[float] | None) -> list[tuple[Chunk, float]]:
+    """ค้นแยกเอกสารไทยกับเอกสารภาษาอื่น แล้วเอาชิ้นที่ดีที่สุดของทั้งสองกลุ่มมารวมกัน
+
+    คำถามเป็นภาษาไทยแต่เอกสารอาจเป็นอังกฤษ/จีน/อาหรับ BM25 ที่ตัดคำไทยจะดึงคำถามไปหาเอกสารไทยเสมอ
+    (วัดบนชุด 100 ข้อ: ค้นเจอเอกสารถูก 5/50 เมื่อเอกสารไม่ใช่ไทย) จึงให้
+      - เอกสารไทย: จัดอันดับด้วย BM25 ตัดคำไทย (แม่นกับภาษาไทย)
+      - เอกสารอื่น: จัดอันดับด้วย BM25 เฉพาะคำอังกฤษ/ตัวเลขในคำค้น + cosine ของ vector
+    แล้วเรียงกลุ่มที่ vector คล้ายคำค้นมากกว่าไว้ก่อน (prompt วางชิ้นที่เกี่ยวข้องที่สุดไว้ต้น)
+    """
+    tokens = lexical.tokenize(query_text)
+    index = _bm25(chunks)
+    bm25_all = _minmax(index.scores(tokens))
+    latin_tokens = [t for t in tokens if not t.startswith("#") and not _THAI_RUN.search(t)]
+    bm25_latin = _minmax(index.scores(latin_tokens)) if latin_tokens else [0.0] * len(chunks)
+
+    vectors = [c.vector for c in chunks]
+    if query_vector is not None and all(v is not None for v in vectors):
+        cosine = [float(x) for x in cosine_many(query_vector, vectors)]
+        dense = _minmax(cosine)
+    else:
+        cosine, dense = None, [0.0] * len(chunks)
+
+    w = settings.GROUP_VECTOR_WEIGHT
+    thai_scores = {i: bm25_all[i] for i in thai}
+    other_scores = {i: (1 - w) * bm25_latin[i] + w * dense[i] for i in other}
+    groups = [(_top_of_group(thai_scores, chunks), thai), (_top_of_group(other_scores, chunks), other)]
+    if cosine is not None:  # กลุ่มที่มีชิ้นคล้ายคำค้นที่สุด (cosine ดิบ เทียบข้ามภาษาได้) มาก่อน
+        groups.sort(key=lambda g: max(cosine[i] for i in g[1]), reverse=True)
+    return [(chunks[i], float(score)) for top, _ in groups for i, score in top]
+
+
+def _top_of_group(scores: dict[int, float], chunks: list[Chunk]) -> list[tuple[int, float]]:
+    """เลือกชิ้นที่ดีที่สุดของกลุ่ม ตัดชิ้นที่ไม่มีคำตรงเลยและชิ้นที่คะแนนต่ำกว่า MIN_RELATIVE_SCORE ของอันดับ 1
+
+    ถ้า MAX_PER_SECTION > 0 จะไม่เอาชิ้นจากหัวข้อเดียวกันเกินจำนวนนั้นในรอบแรก (ให้หลักฐานกระจายหลายหัวข้อ)
+    แล้วเติมที่ว่างที่เหลือด้วยชิ้นที่ถูกข้ามตามลำดับคะแนน จำนวนรวมจึงไม่ลดลง
+    """
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    if not ranked or ranked[0][1] <= 0:
+        return []
+    best = ranked[0][1]
+    kept = [(i, s) for i, s in ranked if s > 0 and s >= settings.MIN_RELATIVE_SCORE * best]
+    limit = max(1, int(settings.GROUP_TOP_K))
+    cap = int(settings.MAX_PER_SECTION)
+    if cap <= 0:
+        return kept[:limit]
+    picked: list[tuple[int, float]] = []
+    skipped: list[tuple[int, float]] = []
+    per_section: dict[tuple[str, str], int] = {}
+    for i, s in kept:
+        key = (chunks[i].doc_id, chunks[i].text.split("\n", 1)[0])  # บรรทัดแรกของ chunk = เส้นทางหัวข้อ
+        if per_section.get(key, 0) < cap and len(picked) < limit:
+            per_section[key] = per_section.get(key, 0) + 1
+            picked.append((i, s))
+        else:
+            skipped.append((i, s))
+    picked += skipped[:limit - len(picked)]
+    return picked
+
+
+def _split_by_language(chunks: list[Chunk]) -> tuple[list[int], list[int]]:
+    """แยกตำแหน่ง chunk เป็น (เอกสารไทย, เอกสารอื่น) ตามสัดส่วนอักษรไทยของทั้งเอกสาร (ไม่ใช่ทีละ chunk)"""
+    key = ("lang", settings.THAI_DOC_SHARE, tuple(hash(c.text) for c in chunks))
+    if key not in _index_cache:
+        thai_chars: dict[str, int] = {}
+        total_chars: dict[str, int] = {}
+        for c in chunks:
+            thai_chars[c.doc_id] = thai_chars.get(c.doc_id, 0) + sum(len(m) for m in _THAI_RUN.findall(c.text))
+            total_chars[c.doc_id] = total_chars.get(c.doc_id, 0) + len(c.text)
+        is_thai = {d: thai_chars[d] / max(1, total_chars[d]) >= settings.THAI_DOC_SHARE for d in total_chars}
+        if len(_index_cache) > 8:
+            _index_cache.clear()
+        _index_cache[key] = ([i for i, c in enumerate(chunks) if is_thai[c.doc_id]],
+                             [i for i, c in enumerate(chunks) if not is_thai[c.doc_id]])
+    return _index_cache[key]
+
+
+def _search_hybrid(chunks: list[Chunk], query_text: str, query_vector: list[float] | None,
+                   k: int) -> list[tuple[Chunk, float]]:
+    """วิธีเดิม: hybrid BM25 + cosine รวมทุกเอกสาร คืนสูงสุด settings.TOP_K ชิ้น เรียงจากคะแนนมากไปน้อย"""
     bm25 = _minmax(_bm25(chunks).scores(lexical.tokenize(query_text)))
 
     weight = 0.0
